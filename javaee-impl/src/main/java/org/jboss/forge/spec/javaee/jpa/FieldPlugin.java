@@ -280,6 +280,7 @@ public class FieldPlugin implements Plugin
          if ((inverseFieldName != null) && !inverseFieldName.isEmpty())
          {
             Field<JavaClass> inverseField = addFieldTo(fieldEntityClass, entityClass, inverseFieldName, OneToOne.class);
+            addBidirectional(fieldEntityClass, entityClass, inverseFieldName, fieldName, OneToOne.class);
             inverseField.getAnnotation(OneToOne.class).setStringValue("mappedBy", localField.getName());
             java.saveJavaSource(fieldEntityClass);
          }
@@ -290,7 +291,116 @@ public class FieldPlugin implements Plugin
       }
    }
 
-   @Command(value = "manyToMany", help = "Add a many-to-many relationship field (java.lang.Set<?>) to an existing @Entity class")
+	private void addBidirectional(final JavaClass targetEntity, final JavaClass fieldEntity,
+            final String fieldName, final String inverseName,
+            final Class<? extends java.lang.annotation.Annotation> annotation) {
+		shell.print("Adding Bidirection Relationship\n");
+		if(annotation.isAssignableFrom(OneToOne.class)){
+			addBidirectionalOneToOne(targetEntity, fieldName, inverseName);			
+		}
+		
+		if(annotation.isAssignableFrom(OneToMany.class)){
+			addBidirectionalOneToMany(targetEntity, fieldEntity, fieldName,
+					inverseName);			
+		}
+		if(annotation.isAssignableFrom(ManyToMany.class)){
+			addBidirectionalManyToMany(targetEntity, fieldEntity, fieldName, inverseName);
+		}
+	
+   	}
+
+	private void addBidirectionalManyToMany(JavaClass targetEntity,
+			JavaClass fieldEntity, String fieldName, String inverseName) {
+		
+		// Set Bidirectional
+		String method = new String();
+		if(fieldEntity.hasMethodSignature("setBidirectional", new String[]{fieldEntity.getName()})){
+			method = fieldEntity.getMethod("setBidirectional", fieldEntity.getName()).getBody(); 
+		}else{
+			fieldEntity.addMethod().setName("setBidirectional").setPublic().setReturnTypeVoid();
+		}
+		method += "Set<" + targetEntity.getName() + "> setOf"  + fieldName + " = this" + ".get" + fieldName.substring(0, 1).toUpperCase() + fieldName.substring(1) +
+				"();\nfor (" + targetEntity.getName() + " " + targetEntity.getName().toLowerCase() + " : " +
+				"setOf"  + fieldName + "){\n\t" +
+				targetEntity.getName().toLowerCase() + ".get" +
+				inverseName.substring(0,1).toUpperCase() + inverseName.substring(1) + "().add(this);\n}";
+		fieldEntity.getMethod("setBidirectional").setBody(method);		
+	
+		// Remove Bidirectional
+		method = new String();
+		if(fieldEntity.hasMethodSignature("removeBidirectional", new String[]{fieldEntity.getName()})){
+			method = fieldEntity.getMethod("removeBidirectional", fieldEntity.getName()).getBody(); 
+		}else{
+			fieldEntity.addMethod().setName("removeBidirectional").setPublic().setReturnTypeVoid();
+		}
+		method += "Set<" + targetEntity.getName() + "> setOf"  + fieldName + " = this" + ".get" + fieldName.substring(0, 1).toUpperCase() + fieldName.substring(1) +
+				"();\nfor (" + targetEntity.getName() + " " + targetEntity.getName().toLowerCase() + " : " +
+				"setOf"  + fieldName + "){\n\t" +
+				targetEntity.getName().toLowerCase() + ".get" +
+				inverseName.substring(0,1).toUpperCase() + inverseName.substring(1) + "().remove(this);\n}";
+		fieldEntity.getMethod("removeBidirectional").setBody(method);	
+	}
+
+	private void addBidirectionalOneToOne(final JavaClass targetEntity,
+			final String fieldName, final String inverseName) {
+		// Set Bidirectional
+		String method = new String();
+		if(targetEntity.hasMethodSignature("setBidirectional", new String[]{targetEntity.getName()})){
+			method = targetEntity.getMethod("setBidirectional", targetEntity.getName()).getBody(); 
+		}else{
+			targetEntity.addMethod().setName("setBidirectional").setPublic().setReturnTypeVoid();
+		}
+		method += "if("  + targetEntity.getName().toLowerCase() + ".get" + fieldName.substring(0, 1).toUpperCase() + fieldName.substring(1) +
+				  "() !=null){\n\t" + targetEntity.getName().toLowerCase() + ".get" + fieldName.substring(0, 1).toUpperCase() + fieldName.substring(1) + 
+				  "().set" + inverseName.substring(0,1).toUpperCase() + inverseName.substring(1) + "(this);\n}";
+		targetEntity.getMethod("setBidirectional").setBody(method);
+		
+		// Remove Bidirectional
+		method = new String();
+		if(targetEntity.hasMethodSignature("removeBidirectional", new String[]{targetEntity.getName()})){
+				method = targetEntity.getMethod("removeBidirectional", targetEntity.getName()).getBody(); 
+		}else{
+			targetEntity.addMethod().setName("removeBidirectional").setPublic().setReturnTypeVoid();
+		}
+		method += "if("  + targetEntity.getName().toLowerCase() + ".get" + fieldName.substring(0, 1).toUpperCase() + fieldName.substring(1) +
+				  "() !=null){\n\t" + targetEntity.getName().toLowerCase() + ".get" + fieldName.substring(0, 1).toUpperCase() + fieldName.substring(1) + 
+				  "().set" + inverseName.substring(0,1).toUpperCase() + inverseName.substring(1) + "(null);\n}";
+		targetEntity.getMethod("removeBidirectional").setBody(method);
+	}
+
+	private void addBidirectionalOneToMany(final JavaClass manyEntity,
+			final JavaClass oneEntity, final String oneName,
+			final String manyName) {
+		// Set Bidirectional
+		String method = new String();
+		if(oneEntity.hasMethodSignature("setBidirectional", new String[]{manyEntity.getName()})){
+			method = oneEntity.getMethod("setBidirectional", oneEntity.getName()).getBody(); 
+		}else{
+			oneEntity.addMethod().setName("setBidirectional").setPublic().setReturnTypeVoid();
+		}
+		method += "Set<" + manyEntity.getName() + "> setOf"  + manyEntity.getName() + " = this" + ".get" + oneName.substring(0, 1).toUpperCase() + oneName.substring(1) +
+				"();\nfor (" + manyEntity.getName() + " " + manyEntity.getName().toLowerCase() + " : " +
+				"setOf"  + manyEntity.getName() + "){\n\t" +
+				manyEntity.getName().toLowerCase() + ".set" +
+				manyName.substring(0,1).toUpperCase() + manyName.substring(1) + "(this);\n}";
+		oneEntity.getMethod("setBidirectional").setBody(method);
+		
+		// Remove Bidirectional
+		method = new String();
+		if(oneEntity.hasMethodSignature("removeBidirectional", new String[]{manyEntity.getName()})){
+			method = oneEntity.getMethod("removeBidirectional", oneEntity.getName()).getBody(); 
+		}else{
+			oneEntity.addMethod().setName("removeBidirectional").setPublic().setReturnTypeVoid();
+		}
+		method += "Set<" + manyEntity.getName() + "> setOf"  + manyEntity.getName() + " = this" + ".get" + oneName.substring(0, 1).toUpperCase() + oneName.substring(1) +
+				"();\nfor (" + manyEntity.getName() + " " + manyEntity.getName().toLowerCase() + " : " +
+				"setOf"  + manyEntity.getName() + "){\n\t" +
+				manyEntity.getName().toLowerCase() + ".set" +
+				manyName.substring(0,1).toUpperCase() + manyName.substring(1) + "(null);\n}";
+		oneEntity.getMethod("removeBidirectional").setBody(method);
+	}
+
+@Command(value = "manyToMany", help = "Add a many-to-many relationship field (java.lang.Set<?>) to an existing @Entity class")
    public void newManyToManyRelationship(
             @Option(name = "named",
                      required = true,
@@ -321,7 +431,7 @@ public class FieldPlugin implements Plugin
                   + otherEntity.getName() + ">();");
          Annotation<JavaClass> annotation = field.addAnnotation(ManyToMany.class);
          Refactory.createGetterAndSetter(entity, field);
-
+         addBidirectional(otherEntity, entity, fieldName, inverseFieldName, ManyToMany.class);
          if ((inverseFieldName != null) && !inverseFieldName.isEmpty())
          {
             annotation.setStringValue("mappedBy", inverseFieldName);
@@ -382,7 +492,7 @@ public class FieldPlugin implements Plugin
             annotation.setLiteralValue("cascade", "CascadeType.ALL");
             annotation.getOrigin().addImport(CascadeType.class);
             annotation.setLiteralValue("orphanRemoval", "true");
-
+            addBidirectional(many, one, fieldName, inverseFieldName, OneToMany.class);
             many.addImport(one);
             Field<JavaClass> manyField = many.addField("private " + one.getName() + " " + inverseFieldName + ";");
             manyField.addAnnotation(ManyToOne.class);
@@ -436,6 +546,7 @@ public class FieldPlugin implements Plugin
                      fieldName);
             oneAnnotation.setLiteralValue("cascade", "CascadeType.ALL");
             oneAnnotation.getOrigin().addImport(CascadeType.class);
+            addBidirectional(many, one, inverseFieldName, fieldName, OneToMany.class);
 
             Refactory.createGetterAndSetter(one, oneField);
             java.saveJavaSource(one);
@@ -462,7 +573,7 @@ public class FieldPlugin implements Plugin
       }
 
       JavaSourceFacet java = project.getFacet(JavaSourceFacet.class);
-
+ 
       Field<JavaClass> field = targetEntity.addField();
       field.setName(fieldName).setPrivate().setType(fieldEntity.getName()).addAnnotation(annotation);
       targetEntity.addImport(fieldEntity.getQualifiedName());

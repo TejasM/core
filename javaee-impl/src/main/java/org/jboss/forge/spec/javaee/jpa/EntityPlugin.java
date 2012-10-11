@@ -74,7 +74,7 @@ public class EntityPlugin implements Plugin
    {
       final PersistenceFacet jpa = project.getFacet(PersistenceFacet.class);
       final JavaSourceFacet java = project.getFacet(JavaSourceFacet.class);
-
+      shell.print("Inside function");
       String entityPackage;
 
       if ((packageName != null) && !"".equals(packageName))
